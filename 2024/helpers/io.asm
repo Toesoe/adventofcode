@@ -4,36 +4,75 @@ section .data
     errMsg db "Error reading file!", 10, 0
 
 section .bss
-    fd resd 1                           ; File descriptor (uninitialized)
+    fd resd 1
+    bufIdx resd 1
+    buffer resb 0xFF
+    outstringIdx resd 1
+    outstring resb 0xFF ; max 256b strings
 
 section .text
-global rdFile
+global setupFile, closeFile, readChunk, readLine
 
-; read a file (filename in ebx) into a buffer passed in ecx, length in edx.
-; length of file is retured in eax, buffer in ecx
-rdFile:
-    ; open file
-    pop ecx                             ; get buffer
-    pop edx                             ; buffer size
+; open a file (filename in ebx)
+; length of file is retured in eax
+setupFile:
     mov eax, 5                          ; sys_open
     mov ecx, 0                          ; O_RDONLY
     int 0x80                            ; do syscall
     cmp eax, 0                          ; get errno
     js handle_error
     mov [fd], eax                       ; store fd
+    ret
 
-    ; read file
+closeFile:
+    mov eax, 6                          ; sys_close
+    mov ebx, [fd]
+    int 0x80
+    ret
+
+readChunk:
     mov eax, 3                          ; sys_read
     mov ebx, [fd]
-    mov ecx, readBuffer
-    mov edx, 65536                      ; buffer size
-    int 0x80                            ; do syscall
+    lea ecx, buffer
+    mov edx, 0xFF
+    int 0x80
     cmp eax, 0                          ; get errno
     js handle_error
+    mov byte [bufIdx], 0
+
+; read a line.
+readLine:
+    cmp eax, 0
+    je _eol                             ; jump out if we haven't read anything
+    mov ecx, eax                        ; ecx holds the number of bytes read
+    mov edx, [bufIdx]                   ; current srcbuffer index
+    mov ebx, [buffer + edx]             ; srcbuffer pointer
+    mov edx, [outstringIdx]
+    mov edx, [outstring + edx]          ; destbuffer pointer
+
+    _getNextChar:
+        mov al, byte [ebx]
+        cmp al, 0xA                     ; check for LF
+        je _eol
+        cmp al, 0xD                     ; check for CR
+        je _eol
+        mov byte [edx], al              ; store byte in output buffer+
+        inc edx
+        inc ebx
+        dec ecx
+        jg _getNextChar
+
+    ; no newline found, or buffer empty. read more data
+    jmp readChunk
+
+_eol:
+    mov byte [ebx + 1], 0               ; null terminate string
+    mov eax, [outstring]                ; return pointer to start of line
     ret
 
 handle_error:
     ; Write error message (sys_write)
+    call closeFile
     mov eax, 4                          ; sys_write
     mov ebx, 1                          ; stdout
     mov ecx, errMsg

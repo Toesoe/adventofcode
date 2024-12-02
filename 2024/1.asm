@@ -1,17 +1,14 @@
 section .data
-    buffer db 65536
-    bufferSize equ 65536
-    inputFn db "input/1.txt", 0
-    c_newline db 10
+    inputFn db "2024/input/1.txt", 0
 
 section .text
-global _start, buffer
+global _start
+extern setupFile, closeFile, readChunk, readLine
 
 _start:
     mov ebx, inputFn
-    push bufferSize
-    push buffer
-    call rdFile                       ; filelen in eax
-    add esp, 8                        ; clean up stack
+    call setupFile
+    call readChunk                    ; gives us the location of the first newline in edi
 
-getLine:
+    ; do stuff
+    call readLine                     ; next line. eax contains start, ebx the length
