@@ -7,7 +7,6 @@ section .bss
     fd resd 1
     bufIdx resd 1
     buffer resb 0xFF
-    outstringIdx resd 1
     outstring resb 0xFF ; max 256b strings
 
 section .text
@@ -38,7 +37,7 @@ readChunk:
     int 0x80
     cmp eax, 0                          ; get errno
     js handle_error
-    mov byte [bufIdx], 0
+    mov dword [bufIdx], 0
 
 ; read a line.
 readLine:
@@ -46,9 +45,8 @@ readLine:
     je _eol                             ; jump out if we haven't read anything
     mov ecx, eax                        ; ecx holds the number of bytes read
     mov edx, [bufIdx]                   ; current srcbuffer index
-    mov ebx, [buffer + edx]             ; srcbuffer pointer
-    mov edx, [outstringIdx]
-    mov edx, [outstring + edx]          ; destbuffer pointer
+    lea ebx, [buffer + edx]             ; srcbuffer pointer
+    lea edx, [outstring + edx]          ; destbuffer pointer
 
     _getNextChar:
         mov al, byte [ebx]
@@ -56,7 +54,7 @@ readLine:
         je _eol
         cmp al, 0xD                     ; check for CR
         je _eol
-        mov byte [edx], al              ; store byte in output buffer+
+        mov byte [edx], al              ; store byte in output buffer
         inc edx
         inc ebx
         dec ecx
@@ -67,7 +65,7 @@ readLine:
 
 _eol:
     mov byte [ebx + 1], 0               ; null terminate string
-    mov eax, [outstring]                ; return pointer to start of line
+    lea eax, [outstring]                ; return pointer to start of line
     ret
 
 handle_error:
